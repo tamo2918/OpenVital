@@ -1,17 +1,28 @@
-//
-//  OpenVitalApp.swift
-//  OpenVital
-//
-//  Created by Tatsuki Morita on 2026/02/26.
-//
-
 import SwiftUI
 
 @main
 struct OpenVitalApp: App {
+    @State private var appState = AppState()
+    @Environment(\.scenePhase) private var scenePhase
+
     var body: some Scene {
         WindowGroup {
-            ContentView()
+            ContentView(appState: appState)
+                .task {
+                    await appState.setup()
+                }
+                .onChange(of: scenePhase) { _, newPhase in
+                    switch newPhase {
+                    case .active:
+                        appState.handleSceneActive()
+                    case .background:
+                        appState.handleSceneBackground()
+                    case .inactive:
+                        break
+                    @unknown default:
+                        break
+                    }
+                }
         }
     }
 }

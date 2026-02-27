@@ -1,24 +1,25 @@
-//
-//  ContentView.swift
-//  OpenVital
-//
-//  Created by Tatsuki Morita on 2026/02/26.
-//
-
 import SwiftUI
 
 struct ContentView: View {
-    var body: some View {
-        VStack {
-            Image(systemName: "globe")
-                .imageScale(.large)
-                .foregroundStyle(.tint)
-            Text("Hello, world!")
-        }
-        .padding()
-    }
-}
+    @Bindable var appState: AppState
 
-#Preview {
-    ContentView()
+    var body: some View {
+        TabView {
+            Tab("Home", systemImage: "server.rack") {
+                HomeView(appState: appState)
+            }
+
+            Tab("Permissions", systemImage: "heart.text.square") {
+                PermissionsView(appState: appState)
+            }
+
+            Tab("Token", systemImage: "key.fill") {
+                TokenView(appState: appState)
+            }
+
+            Tab("Settings", systemImage: "gear") {
+                SettingsView(appState: appState)
+            }
+        }
+    }
 }
