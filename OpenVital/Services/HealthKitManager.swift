@@ -4,13 +4,19 @@ import Foundation
 actor HealthKitManager {
     private let healthStore = HKHealthStore()
     private let cache: HealthDataCache
+    private var webhookManager: WebhookManager?
     private var anchors: [String: HKQueryAnchor] = [:]
     private var observerQueries: [HKObserverQuery] = []
     nonisolated let isAvailable: Bool
 
-    init(cache: HealthDataCache) {
+    init(cache: HealthDataCache, webhookManager: WebhookManager? = nil) {
         self.cache = cache
+        self.webhookManager = webhookManager
         self.isAvailable = HKHealthStore.isHealthDataAvailable()
+    }
+
+    func setWebhookManager(_ manager: WebhookManager) {
+        self.webhookManager = manager
     }
 
     // MARK: - Authorization
@@ -294,6 +300,7 @@ actor HealthKitManager {
                     } else {
                         await self.loadQuantitySamples(for: metric)
                     }
+                    await self.notifyWebhook()
                     completionHandler()
                 }
             }
@@ -311,6 +318,7 @@ actor HealthKitManager {
             }
             Task {
                 await self.loadWorkouts()
+                await self.notifyWebhook()
                 completionHandler()
             }
         }
@@ -323,6 +331,14 @@ actor HealthKitManager {
             healthStore.stop(query)
         }
         observerQueries.removeAll()
+    }
+
+    // MARK: - Webhook
+
+    private func notifyWebhook() async {
+        guard let webhookManager else { return }
+        let export = await cache.exportAllData(days: 7)
+        await webhookManager.sendPayload(export)
     }
 
     // MARK: - Helpers

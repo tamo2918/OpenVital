@@ -189,6 +189,43 @@ actor HealthDataCache {
         return aggregates.sorted { $0.date < $1.date }
     }
 
+    // MARK: - Export
+
+    func exportAllData(days: Int) -> HealthDataExport {
+        let calendar = Calendar.current
+        let now = Date()
+        let startDate = calendar.date(byAdding: .day, value: -days, to: now)!
+
+        let formatter = ISO8601DateFormatter()
+        let dateFormatter = DateFormatter()
+        dateFormatter.dateFormat = "yyyy-MM-dd"
+
+        let startDateString = dateFormatter.string(from: startDate)
+
+        // Aggregate metrics by day
+        var metricsExport: [String: [DailyAggregate]] = [:]
+        for metric in HealthMetricType.all where metric.category != .sleep {
+            let aggregates = getDailyAggregates(type: metric.identifier, start: startDate, end: now)
+            if !aggregates.isEmpty {
+                metricsExport[metric.identifier] = aggregates
+            }
+        }
+
+        // Filter sleep/workout/activity by date range
+        let filteredSleep = sleepRecords.filter { $0.startDate >= startDate && $0.startDate <= now }
+        let filteredWorkouts = workoutRecords.filter { $0.startDate >= startDate && $0.startDate <= now }
+        let filteredActivity = activitySummaries.filter { $0.date >= startDateString }
+
+        return HealthDataExport(
+            exportDate: formatter.string(from: now),
+            periodDays: days,
+            metrics: metricsExport,
+            sleepRecords: filteredSleep,
+            workoutRecords: filteredWorkouts,
+            activitySummaries: filteredActivity
+        )
+    }
+
     // MARK: - Cursor Helpers
 
     private func encodeCursor(_ info: CursorInfo) -> String? {

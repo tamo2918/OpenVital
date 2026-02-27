@@ -19,10 +19,18 @@ final class AppState {
     // MARK: - Token State
     var currentToken: String = ""
 
+    // MARK: - Webhook State
+    var webhookURL: String = ""
+    var webhookEnabled: Bool = false
+    var webhookSecret: String = ""
+    var lastWebhookStatus: WebhookStatus?
+    var isTestingWebhook = false
+
     // MARK: - Services
     let cache = HealthDataCache()
     let tokenManager = TokenManager()
     let requestLogger = RequestLogger()
+    let webhookManager = WebhookManager()
     private(set) var healthKitManager: HealthKitManager!
     private var httpServer: HTTPServer?
 
@@ -30,7 +38,7 @@ final class AppState {
     private let defaults = UserDefaults.standard
 
     init() {
-        healthKitManager = HealthKitManager(cache: cache)
+        healthKitManager = HealthKitManager(cache: cache, webhookManager: webhookManager)
         isHealthKitAvailable = healthKitManager.isAvailable
 
         // Load persisted settings
@@ -46,6 +54,11 @@ final class AppState {
     func setup() async {
         // Load token
         currentToken = await tokenManager.getToken()
+
+        // Load webhook settings
+        webhookURL = await webhookManager.webhookURL
+        webhookEnabled = await webhookManager.webhookEnabled
+        webhookSecret = await webhookManager.webhookSecret ?? ""
 
         // Request permissions and load data if HealthKit is available
         if isHealthKitAvailable {
@@ -151,6 +164,34 @@ final class AppState {
         localhostOnly = value
         defaults.set(!value, forKey: "lanModeEnabled")
         restartServer()
+    }
+
+    // MARK: - Webhook
+
+    func updateWebhookURL(_ url: String) async {
+        webhookURL = url
+        await webhookManager.setURL(url)
+    }
+
+    func updateWebhookEnabled(_ enabled: Bool) async {
+        webhookEnabled = enabled
+        await webhookManager.setEnabled(enabled)
+    }
+
+    func updateWebhookSecret(_ secret: String) async {
+        webhookSecret = secret
+        await webhookManager.setSecret(secret.isEmpty ? nil : secret)
+    }
+
+    func testWebhook() async {
+        isTestingWebhook = true
+        let export = await cache.exportAllData(days: 7)
+        lastWebhookStatus = await webhookManager.sendTestPayload(export)
+        isTestingWebhook = false
+    }
+
+    func refreshWebhookStatus() async {
+        lastWebhookStatus = await webhookManager.lastStatus
     }
 
     // MARK: - Logs

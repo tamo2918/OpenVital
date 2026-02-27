@@ -10,6 +10,8 @@ struct SettingsView: View {
             List {
                 serverSection
                 networkSection
+                webhookSection
+                shortcutsSection
                 dataSection
                 aboutSection
             }
@@ -118,6 +120,106 @@ struct SettingsView: View {
             } else {
                 Text("Cache covers the last 30 days of health data.")
             }
+        }
+    }
+
+    // MARK: - Webhook
+
+    private var webhookSection: some View {
+        Section {
+            Toggle(isOn: Binding(
+                get: { appState.webhookEnabled },
+                set: { newValue in
+                    Task { await appState.updateWebhookEnabled(newValue) }
+                }
+            )) {
+                VStack(alignment: .leading) {
+                    Text("Webhook")
+                    Text("POST health data to external URL on updates")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            }
+
+            if appState.webhookEnabled {
+                TextField("Webhook URL", text: Binding(
+                    get: { appState.webhookURL },
+                    set: { newValue in
+                        Task { await appState.updateWebhookURL(newValue) }
+                    }
+                ))
+                .textContentType(.URL)
+                .keyboardType(.URL)
+                .autocapitalization(.none)
+                .disableAutocorrection(true)
+
+                TextField("Secret (optional, for HMAC signature)", text: Binding(
+                    get: { appState.webhookSecret },
+                    set: { newValue in
+                        Task { await appState.updateWebhookSecret(newValue) }
+                    }
+                ))
+                .autocapitalization(.none)
+                .disableAutocorrection(true)
+
+                Button {
+                    Task { await appState.testWebhook() }
+                } label: {
+                    HStack {
+                        Label("Send Test", systemImage: "paperplane")
+                        if appState.isTestingWebhook {
+                            Spacer()
+                            ProgressView()
+                        }
+                    }
+                }
+                .disabled(appState.webhookURL.isEmpty || appState.isTestingWebhook)
+
+                if let status = appState.lastWebhookStatus {
+                    HStack {
+                        Image(systemName: status.success ? "checkmark.circle.fill" : "xmark.circle.fill")
+                            .foregroundStyle(status.success ? Color.green : Color.red)
+                        VStack(alignment: .leading) {
+                            Text(status.message)
+                                .font(.caption)
+                            Text(status.timestamp.formatted())
+                                .font(.caption2)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                }
+            }
+        } header: {
+            Text("Webhook")
+        } footer: {
+            Text("When enabled, health data is POSTed to the URL whenever HealthKit detects changes.")
+        }
+    }
+
+    // MARK: - Shortcuts
+
+    private var shortcutsSection: some View {
+        Section {
+            VStack(alignment: .leading, spacing: 8) {
+                Text("Use the Shortcuts app to automate health data exports on a schedule.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                Text("Available actions: \"Export Health Data\", \"Get Health Metric\"")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
+            Button {
+                if let url = URL(string: "shortcuts://") {
+                    UIApplication.shared.open(url)
+                }
+            } label: {
+                Label("Open Shortcuts App", systemImage: "arrow.right.circle")
+            }
+        } header: {
+            Text("Shortcuts")
+        } footer: {
+            Text("Create automations like \"Every day at 8 AM, export health data and send to my server\".")
         }
     }
 

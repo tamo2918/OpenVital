@@ -52,3 +52,27 @@ nonisolated struct EndpointDocs: Codable, Sendable {
     let authenticated: [String: String]
     let authHeader: String
 }
+
+// MARK: - Webhook Models
+
+nonisolated struct WebhookPayload: Codable, Sendable {
+    let event: String
+    let timestamp: String
+    let data: HealthDataExport
+}
+
+nonisolated struct HealthDataExport: Codable, Sendable {
+    let exportDate: String
+    let periodDays: Int
+    let metrics: [String: [DailyAggregate]]
+    let sleepRecords: [SleepRecord]
+    let workoutRecords: [WorkoutRecord]
+    let activitySummaries: [ActivitySummaryRecord]
+}
+
+nonisolated struct WebhookStatus: Sendable {
+    let success: Bool
+    let statusCode: Int?
+    let message: String
+    let timestamp: Date
+}
