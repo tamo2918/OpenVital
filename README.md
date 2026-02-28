@@ -19,6 +19,8 @@ OpenVital solves this by running a lightweight HTTP server on your iPhone that e
 - **Cursor-based Pagination** — Efficient data retrieval for large datasets
 - **Daily Aggregates** — Pre-computed daily sums/averages for each metric
 - **Background Delivery** — HealthKit observer queries keep data fresh
+- **Webhook Push** — Automatically POST health data to an external URL when HealthKit detects changes
+- **App Intents / Shortcuts** — Export health data or query specific metrics from the iOS Shortcuts app for scheduled automation
 - **CORS Support** — Works with browser-based tools and web apps
 - **Swift 6 Concurrency** — Actor-based architecture with full strict concurrency
 
@@ -134,6 +136,67 @@ for day in resp.json()["data"]:
     print(f"{day['date']}: {day['value']:.0f} bpm")
 ```
 
+## Webhook
+
+OpenVital can automatically POST health data to an external URL whenever HealthKit detects new data (e.g. new step count, heart rate reading, or workout).
+
+### Setup
+
+1. Open the app → **Settings** tab
+2. Enable the **Webhook** toggle
+3. Enter your destination URL
+4. (Optional) Enter a **Secret** for HMAC-SHA256 request signing
+5. Tap **Send Test** to verify
+
+### Payload
+
+```json
+{
+  "event": "health_data_updated",
+  "timestamp": "2026-02-28T08:00:00Z",
+  "data": {
+    "exportDate": "2026-02-28T08:00:00Z",
+    "periodDays": 7,
+    "metrics": {
+      "stepCount": [
+        { "date": "2026-02-27", "value": 8432, "unit": "count" }
+      ],
+      "heartRate": [
+        { "date": "2026-02-27", "value": 72.5, "unit": "count/min" }
+      ]
+    },
+    "sleepRecords": [],
+    "workoutRecords": [],
+    "activitySummaries": []
+  }
+}
+```
+
+### Signature Verification
+
+When a secret is configured, every request includes an `X-OpenVital-Signature` header containing an HMAC-SHA256 signature of the request body:
+
+```
+X-OpenVital-Signature: sha256=abcdef1234567890...
+```
+
+Verify on your server by computing `HMAC-SHA256(secret, request_body)` and comparing.
+
+## Shortcuts (App Intents)
+
+OpenVital provides two actions for the iOS **Shortcuts** app, enabling scheduled automation without keeping the app in the foreground.
+
+| Action | Description | Parameters |
+|--------|-------------|------------|
+| **Export Health Data** | Export all metrics, sleep, workouts, and activity as JSON | `days` (default: 7) |
+| **Get Health Metric** | Get daily aggregates for a specific metric | `metric`, `days` (default: 7) |
+
+### Automation Examples
+
+- **Daily health report**: Create a Shortcut that runs "Export Health Data" at 8 AM every day and sends the result to your server via an HTTP POST action.
+- **Step count notification**: Run "Get Health Metric" (stepCount) each evening and show a notification with your daily total.
+- **Weekly data backup**: Export 7 days of data every Monday and save to iCloud Drive or Google Sheets.
+
 ## Example Response
 
 ```json
@@ -172,15 +235,20 @@ OpenVital/
 │   ├── HealthKitManager.swift    # HealthKit queries (actor)
 │   ├── HealthDataCache.swift     # In-memory cache with pagination (actor)
 │   ├── TokenManager.swift        # Keychain-backed token management (actor)
-│   └── RequestLogger.swift       # Ring-buffer request logger (actor)
+│   ├── RequestLogger.swift       # Ring-buffer request logger (actor)
+│   └── WebhookManager.swift     # Webhook delivery with HMAC signing (actor)
 ├── Server/
 │   ├── HTTPServer.swift          # POSIX sockets HTTP/1.1 server
 │   └── Router.swift              # Route matching and handlers
+├── Intents/
+│   ├── ExportHealthDataIntent.swift  # App Intent: export all data as JSON
+│   ├── GetMetricIntent.swift         # App Intent: query a specific metric
+│   └── OpenVitalShortcuts.swift      # AppShortcutsProvider registration
 ├── Views/
 │   ├── HomeView.swift            # Server status and logs
 │   ├── PermissionsView.swift     # HealthKit permission management
 │   ├── TokenView.swift           # Token display, QR code, copy
-│   └── SettingsView.swift        # Port, LAN mode, data refresh
+│   └── SettingsView.swift        # Port, LAN mode, webhook, shortcuts
 ├── AppState.swift                # @Observable app state
 ├── ContentView.swift             # Tab container
 └── OpenVitalApp.swift            # Entry point
@@ -192,7 +260,8 @@ OpenVital/
 - Tokens are **cryptographically random** (32 bytes) stored in **iOS Keychain**
 - Server binds to **localhost only** by default (127.0.0.1)
 - LAN mode (0.0.0.0) requires explicit opt-in with warning
-- No data leaves the device — the server runs entirely on-device
+- Webhook requests signed with **HMAC-SHA256** when a secret is configured
+- No data leaves the device unless you explicitly enable Webhook or LAN mode
 - CORS headers included for browser-based clients
 
 ## License
