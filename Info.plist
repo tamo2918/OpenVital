@@ -6,6 +6,8 @@
 	<string>OpenVital reads your health data to provide it as a local REST API on this device. Your data never leaves this device.</string>
 	<key>NSAppTransportSecurity</key>
 	<dict>
+		<key>NSAllowsLocalNetworking</key>
+		<true/>
 		<key>NSExceptionDomains</key>
 		<dict>
 			<key>localhost</key>
