@@ -1,5 +1,8 @@
 import Foundation
 import CryptoKit
+import os.log
+
+private let logger = Logger(subsystem: "com.openvital", category: "Webhook")
 
 actor WebhookManager {
     // MARK: - Configuration
@@ -28,30 +31,37 @@ actor WebhookManager {
 
         let config = URLSessionConfiguration.default
         config.timeoutIntervalForRequest = 30
-        config.waitsForConnectivity = true
+        config.waitsForConnectivity = false
         self.urlSession = URLSession(configuration: config)
+        logger.info("WebhookManager initialized — enabled: \(self.webhookEnabled), url: \(self.webhookURL)")
     }
 
     // MARK: - Configuration Updates
 
     func setURL(_ url: String) {
         webhookURL = url
+        logger.debug("Webhook URL updated: \(url)")
     }
 
     func setEnabled(_ enabled: Bool) {
         webhookEnabled = enabled
+        logger.debug("Webhook enabled: \(enabled)")
     }
 
     func setSecret(_ secret: String?) {
         webhookSecret = secret
+        logger.debug("Webhook secret updated (hasValue: \(secret != nil && !(secret?.isEmpty ?? true)))")
     }
 
     // MARK: - Send
 
     func sendPayload(_ export: HealthDataExport) async {
         guard webhookEnabled, !webhookURL.isEmpty, let url = URL(string: webhookURL) else {
+            logger.warning("sendPayload skipped — enabled: \(self.webhookEnabled), url: '\(self.webhookURL)'")
             return
         }
+
+        logger.info("sendPayload starting → \(url.absoluteString)")
 
         let formatter = ISO8601DateFormatter()
         let payload = WebhookPayload(
@@ -62,6 +72,7 @@ actor WebhookManager {
 
         do {
             let body = try JSONCoders.encoder.encode(payload)
+            logger.info("Payload encoded — \(body.count) bytes")
 
             var request = URLRequest(url: url)
             request.httpMethod = "POST"
@@ -74,10 +85,13 @@ actor WebhookManager {
                 request.setValue(signature, forHTTPHeaderField: "X-OpenVital-Signature")
             }
 
+            logger.info("Sending HTTP POST...")
             let (_, response) = try await urlSession.data(for: request)
             let httpResponse = response as? HTTPURLResponse
             let statusCode = httpResponse?.statusCode ?? 0
             let success = (200..<300).contains(statusCode)
+
+            logger.info("Response received — status: \(statusCode), success: \(success)")
 
             lastStatus = WebhookStatus(
                 success: success,
@@ -86,6 +100,7 @@ actor WebhookManager {
                 timestamp: Date()
             )
         } catch {
+            logger.error("sendPayload failed: \(error.localizedDescription)")
             lastStatus = WebhookStatus(
                 success: false,
                 statusCode: nil,
@@ -96,13 +111,16 @@ actor WebhookManager {
     }
 
     func sendTestPayload(_ export: HealthDataExport) async -> WebhookStatus {
+        logger.info("sendTestPayload called")
         await sendPayload(export)
-        return lastStatus ?? WebhookStatus(
+        let result = lastStatus ?? WebhookStatus(
             success: false,
             statusCode: nil,
             message: "No result",
             timestamp: Date()
         )
+        logger.info("sendTestPayload done — success: \(result.success), message: \(result.message)")
+        return result
     }
 
     // MARK: - HMAC

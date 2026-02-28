@@ -184,10 +184,16 @@ final class AppState {
     }
 
     func testWebhook() async {
+        print("[AppState] testWebhook start")
         isTestingWebhook = true
+        print("[AppState] exporting data...")
         let export = await cache.exportAllData(days: 7)
+        print("[AppState] export done — metrics: \(export.metrics.count), sleep: \(export.sleepRecords.count)")
+        print("[AppState] calling sendTestPayload...")
         lastWebhookStatus = await webhookManager.sendTestPayload(export)
+        print("[AppState] sendTestPayload returned — success: \(lastWebhookStatus?.success ?? false)")
         isTestingWebhook = false
+        print("[AppState] testWebhook end")
     }
 
     func refreshWebhookStatus() async {

@@ -335,10 +335,17 @@ actor HealthKitManager {
 
     // MARK: - Webhook
 
-    private func notifyWebhook() async {
-        guard let webhookManager else { return }
-        let export = await cache.exportAllData(days: 7)
-        await webhookManager.sendPayload(export)
+    private var webhookDebounceTask: Task<Void, Never>?
+
+    private func notifyWebhook() {
+        guard webhookManager != nil else { return }
+        webhookDebounceTask?.cancel()
+        webhookDebounceTask = Task {
+            try? await Task.sleep(for: .seconds(5))
+            guard !Task.isCancelled, let webhookManager else { return }
+            let export = await cache.exportAllData(days: 7)
+            await webhookManager.sendPayload(export)
+        }
     }
 
     // MARK: - Helpers
